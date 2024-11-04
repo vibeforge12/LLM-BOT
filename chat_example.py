@@ -34,4 +34,6 @@ if __name__ == "__main__":
         input_messages = [HumanMessage(query)]
         output = app.invoke({"messages": input_messages}, config)
         output["messages"][-1].pretty_print()  # output contains all messages in state
-        # print(output)
+        messages = output['messages']
+        last_message = messages[-1]
+        print(last_message)
