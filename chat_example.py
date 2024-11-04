@@ -25,12 +25,13 @@ workflow.add_node("model", call_model)
 memory = MemorySaver()
 app = workflow.compile(checkpointer=memory)
 
-config = {"configurable": {"thread_id": "abc123"}}
+if __name__ == "__main__":
+    config = {"configurable": {"thread_id": "abc123"}}
 
-queries = ["Hi! I'm Bob.", "What's my name?"]
+    queries = ["Hi! I'm Bob.", "What's my name?"]
 
-for query in queries:
-    input_messages = [HumanMessage(query)]
-    output = app.invoke({"messages": input_messages}, config)
-    output["messages"][-1].pretty_print()  # output contains all messages in state
-    # print(output)
+    for query in queries:
+        input_messages = [HumanMessage(query)]
+        output = app.invoke({"messages": input_messages}, config)
+        output["messages"][-1].pretty_print()  # output contains all messages in state
+        # print(output)
