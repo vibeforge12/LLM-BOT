@@ -1,4 +1,4 @@
-from config import *
+from common import *
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
