@@ -79,6 +79,16 @@ checkpointer = MemorySaver()
 # Note that we're (optionally) passing the memory when compiling the graph
 app = workflow.compile(checkpointer=checkpointer)
 
+
+# 그래프를 출력해봄
+from PIL import Image
+import io
+
+result = app.get_graph().draw_mermaid_png()
+image = io.BytesIO(result)
+im = Image.open(image)
+im.show()
+
 # Use the Runnable
 final_state = app.invoke(
     {"messages": [HumanMessage(content="what is the weather in seoul")]},
