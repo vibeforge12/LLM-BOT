@@ -4,7 +4,7 @@
 venv
 db
 models
-resources/openai_key.json
+vectordb
 
 ### JupyterNotebooks template
 # gitignore template for Jupyter Notebooks

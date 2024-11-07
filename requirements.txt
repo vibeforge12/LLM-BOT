@@ -2,3 +2,5 @@ python-dotenv
 langchain_openai
 langgraph
 gradio
+langchain-community
+langchain-chroma
