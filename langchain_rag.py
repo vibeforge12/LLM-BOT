@@ -14,6 +14,8 @@ from langchain_community.document_loaders.csv_loader import CSVLoader
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
+from prompt.prompt_ko import *
+
 
 class Chat(BaseModel):
     response: str = Field(description="answer to the question ")
@@ -29,13 +31,10 @@ class DialogLLM:
         self.retriever = retriever
 
     def generate_response(self, message: str):
-        contextualize_q_system_prompt = (
-            "Given a chat history and the latest user question "
-            "which might reference context in the chat history, "
-            "formulate a standalone question which can be understood "
-            "without the chat history. Do NOT answer the question, "
-            "just reformulate it if needed and otherwise return it as is."
-        )
+        #
+        # 대화이력을 통해 질문을 재작성 하는 단계
+        #
+        contextualize_q_system_prompt = CONTEXT_Q_SYSTEM_PROMPT
 
         contextualize_q_prompt = ChatPromptTemplate.from_messages([
             ("system", contextualize_q_system_prompt),
@@ -52,15 +51,10 @@ class DialogLLM:
             self.llm, self.retriever, contextualize_q_prompt
         )
 
-        system_prompt = (
-            "You are an assistant for question-answering tasks. "
-            "Use the following pieces of retrieved context to answer "
-            "the question. If you don't know the answer, say that you "
-            "don't know. Use three sentences maximum and keep the "
-            "answer concise."
-            "\n\n"
-            "{context}"
-        )
+        #
+        # 대화이력을 통해 질문을 재작성한 결과를 통해 답변을 생성하는 단계
+        #
+        system_prompt = SYSTEM_PROMPT
         qa_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", system_prompt),
@@ -85,7 +79,6 @@ class DialogRetriever:
         self.collection_name = collection_name
         self.chroma_db_path = chroma_db_path
 
-        self.llm = ChatOpenAI(model="gpt-4o-mini")
         self.embeddings_model = OpenAIEmbeddings()
 
         if not os.path.exists(chroma_db_path):
@@ -113,18 +106,20 @@ class DialogRetriever:
         return self.vectorstore.as_retriever()
 
 
-loader = CSVLoader(file_path='data/dialog_data.csv', metadata_columns=["id", "category"], content_columns=["content"])
-data = loader.load()
+if __name__ == "__main__":
+    loader = CSVLoader(file_path='data/dialog_data.csv', metadata_columns=["id", "category"],
+                       content_columns=["content"])
+    data = loader.load()
 
-retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path="vectordb", data=data)
+    retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path="vectordb", data=data)
 
-retrieved_docs = retriever.retrieve(data)
+    retrieved_docs = retriever.retrieve(data)
 
-for doc in retrieved_docs:
-    print(doc.page_content)
-    print(doc.metadata)
+    for doc in retrieved_docs:
+        print(doc.page_content)
+        print(doc.metadata)
 
-llm = DialogLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever())
-result = llm.generate_response("공부를 어떻게 해야할지 쉽지가 않아요")
+    llm = DialogLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever())
+    result = llm.generate_response("공부를 어떻게 해야할지 쉽지가 않아요")
 
-print(result['answer'])
+    print(f'answer: {result["answer"]}')
