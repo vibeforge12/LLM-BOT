@@ -113,13 +113,16 @@ if __name__ == "__main__":
 
     retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path="vectordb", data=data)
 
-    retrieved_docs = retriever.retrieve(data)
+    # retrieved_docs = retriever.retrieve(data)
+    #
+    # for doc in retrieved_docs:
+    #     print(doc.page_content)
+    #     print(doc.metadata)
 
-    for doc in retrieved_docs:
-        print(doc.page_content)
-        print(doc.metadata)
+    print("AI: 안녕하세요! 대화를 시작해보세요.")
+    while True:
+        input_text = input('사용자: ')
+        llm = DialogLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever())
+        result = llm.generate_response(input_text.strip())
 
-    llm = DialogLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever())
-    result = llm.generate_response("공부를 어떻게 해야할지 쉽지가 않아요")
-
-    print(f'answer: {result["answer"]}')
+        print(f'AI: {result["answer"]}')
