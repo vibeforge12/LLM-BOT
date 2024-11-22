@@ -127,7 +127,7 @@ if __name__ == "__main__":
 
     print(f'Current session_id: {session_id}')
 
-    print("AI: 안녕하세요! 대화를 시작해보세요.")
+    print("AI: 반가워! 나는 대화를 좋아하는 오렌지큐라고해. 함께 이야기하며 너의 고민을 들어주고 싶어. 어떤 고민이 있는지 말해줄래?")
     while True:
         input_text = input('사용자: ')
         llm = DialogLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever(),
