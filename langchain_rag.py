@@ -1,17 +1,16 @@
 import string
 import random
 from datetime import datetime
+from typing import Dict, Any, List
 
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
 from langchain.chains.retrieval import create_retrieval_chain
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.messages import HumanMessage
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
-
-import config
-from common import *
-
 from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.document_loaders.csv_loader import CSVLoader
@@ -19,7 +18,18 @@ from langchain_community.chat_message_histories import SQLChatMessageHistory
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
+import config
+from logger import logger
+from common import *
 from prompt.prompt_ko import *
+
+
+class CustomHandler(BaseCallbackHandler):
+    def on_llm_start(
+            self, serialized: Dict[str, Any], prompts: List[str], **kwargs: Any
+    ) -> Any:
+        formatted_prompts = "\n".join(prompts)
+        logger.debug(f"Prompt:\n{formatted_prompts}")
 
 
 class Chat(BaseModel):
@@ -70,8 +80,40 @@ class DialogLLM:
             session_id=self.session_id, connection="sqlite:///sqlite.db"
         ), input_messages_key="input", history_messages_key="chat_history", output_messages_key="answer")
 
-        config = {"configurable": {"session_id": "test"}}  # session_id를 넘기긴 해야하나 사용되지 않음
+        config = {"configurable": {"session_id": self.session_id},
+                  "callbacks": [CustomHandler()]}  # session_id를 넘기긴 해야하나 사용되지 않음
         response = chain_with_history.invoke({"input": message}, config=config)
+
+        #
+        # 대화 이력을 통해 클래스를 분류하는 단계
+        #
+        chat_history = response["chat_history"]
+        chat_history.append(HumanMessage(message))  # 사용자의 입력을 대화이력에 추가
+        logger.debug(f"chat_history: {chat_history}")
+
+        # chat_history를 텍스트로 변환
+        chat_history_list = []
+        for message_obj in chat_history:
+            if message_obj.type == "human":
+                chat_history_list.append(f"학생: {message_obj.content}")
+            else:
+                chat_history_list.append(f"선생님: {message_obj.content}")
+
+        classifier_prompt = PromptTemplate.from_template(CLASSIFIER_PROMPT)
+
+        class Classification(BaseModel):
+            category: str = Field(description="대화이력에 해당하는 분류 이름")
+            probability: float = Field(description="대화이력에 해당하는 분류의 확률(0~1사이의 값)")
+
+        output_parser = JsonOutputParser(pydantic_object=Classification)
+        format_instructions = output_parser.get_format_instructions()
+
+        classifier_chain = classifier_prompt | self.llm | output_parser
+
+        response_2 = classifier_chain.invoke({"chat_history": chat_history_list, "format_instructions": format_instructions},
+                                             config=config)
+
+        print(response_2)
 
         return response
 
@@ -125,13 +167,14 @@ if __name__ == "__main__":
     rand_str = ''.join(random.choice(string.ascii_lowercase) for i in range(5))
     session_id = f"{date_str}_{rand_str}"
 
-    print(f'Current session_id: {session_id}')
+    logger.info(f'Current session_id: {session_id}')
+
+    llm = DialogLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever(), session_id=session_id)
 
     print("AI: 반가워! 나는 대화를 좋아하는 오렌지큐라고해. 함께 이야기하며 너의 고민을 들어주고 싶어. 어떤 고민이 있는지 말해줄래?")
     while True:
         input_text = input('사용자: ')
-        llm = DialogLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever(),
-                        session_id=session_id)
+
         result = llm.generate_response(input_text.strip())
 
         print(f'AI: {result["answer"]}')
