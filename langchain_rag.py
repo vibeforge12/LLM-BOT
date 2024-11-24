@@ -102,16 +102,16 @@ class DialogLLM:
         classifier_prompt = PromptTemplate.from_template(CLASSIFIER_PROMPT)
 
         class Classification(BaseModel):
-            category: str = Field(description="대화이력에 해당하는 분류 이름")
-            probability: float = Field(description="대화이력에 해당하는 분류의 확률(0~1사이의 값)")
+            probabilities: Dict[str, float] = Field(description="대화이력에 해당하는 각 분류의 확률 딕셔너리(0~1사이의 값)")
 
         output_parser = JsonOutputParser(pydantic_object=Classification)
         format_instructions = output_parser.get_format_instructions()
 
         classifier_chain = classifier_prompt | self.llm | output_parser
 
-        response_2 = classifier_chain.invoke({"chat_history": chat_history_list, "format_instructions": format_instructions},
-                                             config=config)
+        response_2 = classifier_chain.invoke(
+            {"chat_history": chat_history_list, "format_instructions": format_instructions},
+            config=config)
 
         print(response_2)
 
