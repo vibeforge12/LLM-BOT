@@ -5,6 +5,7 @@ venv
 db
 models
 vectordb
+sqlite.db
 
 ### JupyterNotebooks template
 # gitignore template for Jupyter Notebooks
