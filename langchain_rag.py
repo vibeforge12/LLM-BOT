@@ -43,6 +43,11 @@ class DialogLLM:
             temperature=0,
         )
 
+        self.critic_llm = ChatOpenAI(
+            model_name='gpt-4o',
+            temperature=0,
+        )
+
         self.retriever = retriever
         self.session_id = session_id
 
@@ -102,12 +107,12 @@ class DialogLLM:
         classifier_prompt = PromptTemplate.from_template(CLASSIFIER_PROMPT)
 
         class Classification(BaseModel):
-            probabilities: Dict[str, float] = Field(description="대화이력에 해당하는 각 분류의 확률 딕셔너리(0~1사이의 값)")
+            probabilities: Dict[str, float] = Field(description="대화이력에 해당하는 각 분류의 확률 딕셔너리, 확률의 합은 1이 되어야 함(0~1사이의 값)")
 
         output_parser = JsonOutputParser(pydantic_object=Classification)
         format_instructions = output_parser.get_format_instructions()
 
-        classifier_chain = classifier_prompt | self.llm | output_parser
+        classifier_chain = classifier_prompt | self.critic_llm | output_parser
 
         response_2 = classifier_chain.invoke(
             {"chat_history": chat_history_list, "format_instructions": format_instructions},
@@ -150,8 +155,8 @@ class DialogRetriever:
 
 
 if __name__ == "__main__":
-    loader = CSVLoader(file_path='data/dialog_data.csv', metadata_columns=["id", "category"],
-                       content_columns=["content"])
+    loader = CSVLoader(file_path='data/train.csv', metadata_columns=["id", "category"],
+                       content_columns=["category", "content"])
     data = loader.load()
 
     retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path="vectordb", data=data)
