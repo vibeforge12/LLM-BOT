@@ -259,7 +259,8 @@ class UserSimulator:
                            content_columns=["category", "content"])
         data = loader.load()
 
-        retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path="vectordb", data=data)
+        vectordb_path = os.path.join(APP_ROOT, 'vectordb')
+        retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path=vectordb_path, data=data)
 
         self.user_llm = SimulatedUserLLM(config.GPT_MODEL, retriever)
 
