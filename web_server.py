@@ -1,9 +1,8 @@
 import os
 
 from flask import Flask, request, Blueprint, jsonify
-from langchain_community.document_loaders import CSVLoader
 
-from langchain_rag import DialogAgentLLM, DialogRetriever
+from langchain_rag import DialogAgent
 from logger import logger
 from common import *
 import config
@@ -32,15 +31,9 @@ def chat():
 
     print(f'User: {input_text}')
 
-    loader = CSVLoader(file_path='data/train.csv', metadata_columns=["id", "category"],
-                       content_columns=["category", "content"])
-    data = loader.load()
+    dialog_agent = DialogAgent(session_id)
 
-    retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path="vectordb", data=data)
-
-    llm = DialogAgentLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever(), session_id=session_id)
-
-    result = llm.generate_response(input_text.strip())
+    result = dialog_agent.generate_response(input_text)
 
     logger.debug(f'LLM result: {result}')
 

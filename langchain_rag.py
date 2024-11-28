@@ -227,7 +227,7 @@ class DialogAgent:
         self.update_chat_history(response)
         answer = response["answer"]
 
-        return answer
+        return self.postprocess_response(response)
 
     def update_chat_history(self, response):
         chat_history = response["chat_history"]
