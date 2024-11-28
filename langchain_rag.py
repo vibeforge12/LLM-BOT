@@ -7,7 +7,7 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
 from langchain.chains.retrieval import create_retrieval_chain
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
@@ -51,31 +51,6 @@ class DialogLLM:
         self.retriever = retriever
         self.session_id = session_id
 
-    def update_chat_history(self, chat_history: List[str], message: str):
-        chat_history.append(HumanMessage(message))
-        self.chat_history = chat_history
-
-    def get_chat_history(self):
-        return self.chat_history
-
-    def postprocess_response(self, response: str):
-        answer = response["answer"]
-        chat_history = response["chat_history"]
-
-        history = []
-        for message_obj in chat_history:
-            history_dict = {}
-            if message_obj.type == "human":
-                history_dict["role"] = "User"
-                history_dict["content"] = message_obj.content
-            else:
-                history_dict["role"] = "AI"
-                history_dict["content"] = message_obj.content
-
-            history.append(history_dict)
-
-        return {"answer": answer, "history": history}
-
     def generate_response(self, message: str):
         #
         # 대화이력을 통해 질문을 재작성 하는 단계
@@ -107,7 +82,7 @@ class DialogLLM:
         rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
 
         chain_with_history = RunnableWithMessageHistory(rag_chain, lambda get_session_history: SQLChatMessageHistory(
-            session_id=self.session_id, connection="sqlite:///sqlite.db"
+            session_id=self.session_id, connection=f"sqlite:///{APP_ROOT}/sqlite.db"
         ), input_messages_key="input", history_messages_key="chat_history", output_messages_key="answer")
 
         config = {"configurable": {"session_id": self.session_id},
@@ -117,35 +92,34 @@ class DialogLLM:
         #
         # 대화 이력을 통해 클래스를 분류하는 단계
         #
-        chat_history = response["chat_history"]
-        self.update_chat_history(chat_history, message)
-        logger.debug(f"chat_history: {chat_history}")
+        # chat_history = response["chat_history"]
+        # logger.debug(f"chat_history: {chat_history}")
+        #
+        # # chat_history를 텍스트로 변환
+        # chat_history_list = []
+        # for message_obj in chat_history:
+        #     if message_obj.type == "human":
+        #         chat_history_list.append(f"학생 : {message_obj.content}")
+        #     else:
+        #         chat_history_list.append(f"선생님 : {message_obj.content}")
+        #
+        # classifier_prompt = PromptTemplate.from_template(CLASSIFIER_PROMPT)
+        #
+        # class Classification(BaseModel):
+        #     probabilities: Dict[str, float] = Field(description="대화이력에 해당하는 각 분류의 확률 딕셔너리, 확률의 합은 1이 되어야 함(0~1사이의 값)")
+        #
+        # output_parser = JsonOutputParser(pydantic_object=Classification)
+        # format_instructions = output_parser.get_format_instructions()
+        #
+        # classifier_chain = classifier_prompt | self.critic_llm | output_parser
+        #
+        # response_2 = classifier_chain.invoke(
+        #     {"chat_history": chat_history_list, "format_instructions": format_instructions},
+        #     config=config)
+        #
+        # print(response_2)
 
-        # chat_history를 텍스트로 변환
-        chat_history_list = []
-        for message_obj in chat_history:
-            if message_obj.type == "human":
-                chat_history_list.append(f"학생 : {message_obj.content}")
-            else:
-                chat_history_list.append(f"선생님 : {message_obj.content}")
-
-        classifier_prompt = PromptTemplate.from_template(CLASSIFIER_PROMPT)
-
-        class Classification(BaseModel):
-            probabilities: Dict[str, float] = Field(description="대화이력에 해당하는 각 분류의 확률 딕셔너리, 확률의 합은 1이 되어야 함(0~1사이의 값)")
-
-        output_parser = JsonOutputParser(pydantic_object=Classification)
-        format_instructions = output_parser.get_format_instructions()
-
-        classifier_chain = classifier_prompt | self.critic_llm | output_parser
-
-        response_2 = classifier_chain.invoke(
-            {"chat_history": chat_history_list, "format_instructions": format_instructions},
-            config=config)
-
-        print(response_2)
-
-        return self.postprocess_response(response)
+        return response
 
 
 class DialogRetriever:
@@ -214,9 +188,74 @@ class SimulatedUserLLM:
         return response
 
 
+class DialogAgent:
+    chat_history = []
+
+    def __init__(self, session_id: str):
+        csv_file = os.path.join(APP_ROOT, 'data/train.csv')
+        loader = CSVLoader(file_path=csv_file, metadata_columns=["id", "category"],
+                           content_columns=["category", "content"])
+        data = loader.load()
+
+        vectordb_path = os.path.join(APP_ROOT, 'vectordb')
+        retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path=vectordb_path, data=data)
+
+        self.llm = DialogLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever(), session_id=session_id)
+
+    def postprocess_response(self, response: str):
+        answer = response["answer"]
+        chat_history = response["chat_history"]
+
+        history = []
+        for message_obj in chat_history:
+            history_dict = {}
+            if message_obj.type == "human":
+                history_dict["role"] = "User"
+                history_dict["content"] = message_obj.content
+            else:
+                history_dict["role"] = "AI"
+                history_dict["content"] = message_obj.content
+
+            history.append(history_dict)
+
+        return {"answer": answer, "history": history}
+
+    def generate_response(self, message):
+        response = self.llm.generate_response(message)
+        self.update_chat_history(response)
+        answer = response["answer"]
+
+        return answer
+
+    def update_chat_history(self, response):
+        chat_history = response["chat_history"]
+        input_meg = HumanMessage(response["input"])
+        chat_history.append(input_meg)
+        answer_msg = AIMessage(response["answer"])
+        chat_history.append(answer_msg)
+
+        self.chat_history = chat_history
+
+    def get_chat_history(self, return_type="text"):
+        if return_type == "text":
+            chat_history = []
+            for message_obj in self.chat_history:
+                if message_obj.type == "human":
+                    chat_history.append(f"User : {message_obj.content}")
+                else:
+                    chat_history.append(f"AI : {message_obj.content}")
+
+            return chat_history
+        elif return_type == "object":
+            return self.chat_history
+        else:
+            raise ValueError("Invalid return_type")
+
+
 class UserSimulator:
     def __init__(self):
-        loader = CSVLoader(file_path='data/test.csv', metadata_columns=["id", "category"],
+        csv_file = os.path.join(APP_ROOT, 'data/test.csv')
+        loader = CSVLoader(file_path=csv_file, metadata_columns=["id", "category"],
                            content_columns=["category", "content"])
         data = loader.load()
 
@@ -232,17 +271,6 @@ class UserSimulator:
 
 
 if __name__ == "__main__":
-    loader = CSVLoader(file_path='data/train.csv', metadata_columns=["id", "category"],
-                       content_columns=["category", "content"])
-    data = loader.load()
-
-    retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path="vectordb", data=data)
-
-    # retrieved_docs = retriever.retrieve(data)
-    #
-    # for doc in retrieved_docs:
-    #     print(doc.page_content)
-    #     print(doc.metadata)
 
     # 세션 아이디 생성
     date_str = datetime.now().strftime("%Y%m%d")
@@ -251,12 +279,12 @@ if __name__ == "__main__":
 
     logger.info(f'Current session_id: {session_id}')
 
-    llm = DialogLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever(), session_id=session_id)
+    dialog_agent = DialogAgent(session_id)
 
     print("AI: 반가워! 나는 대화를 좋아하는 오렌지큐라고해. 함께 이야기하며 너의 고민을 들어주고 싶어. 어떤 고민이 있는지 말해줄래?")
     while True:
         input_text = input('사용자: ')
 
-        result = llm.generate_response(input_text.strip())
+        result = dialog_agent.generate_response(input_text)
 
-        print(f'AI: {result["answer"]}')
+        print(f'AI: {result}')
