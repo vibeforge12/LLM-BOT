@@ -66,10 +66,10 @@ class DialogLLM:
         for message_obj in chat_history:
             history_dict = {}
             if message_obj.type == "human":
-                history_dict["speaker"] = "User"
+                history_dict["role"] = "User"
                 history_dict["content"] = message_obj.content
             else:
-                history_dict["speaker"] = "AI"
+                history_dict["role"] = "AI"
                 history_dict["content"] = message_obj.content
 
             history.append(history_dict)
@@ -125,9 +125,9 @@ class DialogLLM:
         chat_history_list = []
         for message_obj in chat_history:
             if message_obj.type == "human":
-                chat_history_list.append(f"학생: {message_obj.content}")
+                chat_history_list.append(f"학생 : {message_obj.content}")
             else:
-                chat_history_list.append(f"선생님: {message_obj.content}")
+                chat_history_list.append(f"선생님 : {message_obj.content}")
 
         classifier_prompt = PromptTemplate.from_template(CLASSIFIER_PROMPT)
 
@@ -177,6 +177,58 @@ class DialogRetriever:
 
     def get_retriever(self):
         return self.vectorstore.as_retriever()
+
+
+class SimulatedUserLLM:
+    def __init__(self, model_name: str, retriever: DialogRetriever):
+        self.llm = ChatOpenAI(
+            model_name=model_name,
+            temperature=0,
+        )
+
+        self.retriever = retriever
+
+    def generate_response(self, chat_history: list):
+        chat_history_list = []
+        for message_obj in chat_history:
+            if message_obj.type == "human":
+                chat_history_list.append(f"학생 : {message_obj.content}")
+            else:
+                chat_history_list.append(f"선생님 : {message_obj.content}")
+
+        chat_history_text = "\n".join(chat_history_list)
+
+        system_prompt = USER_PROMPT
+        simulated_user_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system_prompt),
+                MessagesPlaceholder("chat_history"),
+            ]
+        )
+
+        question_answer_chain = create_stuff_documents_chain(self.llm, simulated_user_prompt)
+        retriever_chain = create_retrieval_chain(self.retriever.get_retriever(), question_answer_chain)
+
+        response = retriever_chain.invoke({"input": chat_history_text, "chat_history": chat_history})
+
+        return response
+
+
+class UserSimulator:
+    def __init__(self):
+        loader = CSVLoader(file_path='data/test.csv', metadata_columns=["id", "category"],
+                           content_columns=["category", "content"])
+        data = loader.load()
+
+        retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path="vectordb", data=data)
+
+        self.user_llm = SimulatedUserLLM(config.GPT_MODEL, retriever)
+
+    def generate_response(self, history):
+        result = self.user_llm.generate_response(history)
+        ansewer = result["answer"]
+
+        return ansewer
 
 
 if __name__ == "__main__":
