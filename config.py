@@ -11,9 +11,12 @@ def str_to_bool(value):
 # DEBUG
 DEBUG = str_to_bool(os.getenv('DEBUG', 'false'))
 
+PROTOCOL = 'http'
+
 # 테스트 서버 정보
 SERVER_HOST = os.getenv('SERVER_HOST')
 SERVER_PORT = os.getenv('SERVER_PORT')
+SERVER_URL = f'{PROTOCOL}://{SERVER_HOST}:{SERVER_PORT}/'
 
 # LLM Model
 GPT_MODEL = os.getenv('GPT_MODEL')

@@ -51,6 +51,31 @@ class DialogLLM:
         self.retriever = retriever
         self.session_id = session_id
 
+    def update_chat_history(self, chat_history: List[str], message: str):
+        chat_history.append(HumanMessage(message))
+        self.chat_history = chat_history
+
+    def get_chat_history(self):
+        return self.chat_history
+
+    def postprocess_response(self, response: str):
+        answer = response["answer"]
+        chat_history = response["chat_history"]
+
+        history = []
+        for message_obj in chat_history:
+            history_dict = {}
+            if message_obj.type == "human":
+                history_dict["speaker"] = "User"
+                history_dict["content"] = message_obj.content
+            else:
+                history_dict["speaker"] = "AI"
+                history_dict["content"] = message_obj.content
+
+            history.append(history_dict)
+
+        return {"answer": answer, "history": history}
+
     def generate_response(self, message: str):
         #
         # 대화이력을 통해 질문을 재작성 하는 단계
@@ -93,7 +118,7 @@ class DialogLLM:
         # 대화 이력을 통해 클래스를 분류하는 단계
         #
         chat_history = response["chat_history"]
-        chat_history.append(HumanMessage(message))  # 사용자의 입력을 대화이력에 추가
+        self.update_chat_history(chat_history, message)
         logger.debug(f"chat_history: {chat_history}")
 
         # chat_history를 텍스트로 변환
@@ -120,7 +145,7 @@ class DialogLLM:
 
         print(response_2)
 
-        return response
+        return self.postprocess_response(response)
 
 
 class DialogRetriever:
