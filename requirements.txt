@@ -5,3 +5,4 @@ gradio
 langchain-community
 langchain-chroma
 scikit-learn
+flask

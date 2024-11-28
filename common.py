@@ -4,6 +4,7 @@ from config import *
 
 # 애플리케이션 루트 디렉토리
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_FOLDER = 'uploads'
 
 # Set OpenAI environment variables
 openai_api_key = os.environ.get("OPENAI_API_KEY")
