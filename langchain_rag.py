@@ -36,7 +36,7 @@ class Chat(BaseModel):
     response: str = Field(description="answer to the question ")
 
 
-class DialogLLM:
+class DialogAgentLLM:
     def __init__(self, model_name: str, retriever: Chroma, session_id: str):
         self.llm = ChatOpenAI(
             model_name=model_name,
@@ -153,7 +153,7 @@ class DialogRetriever:
         return self.vectorstore.as_retriever()
 
 
-class SimulatedUserLLM:
+class UserSimulatorLLM:
     def __init__(self, model_name: str, retriever: DialogRetriever):
         self.llm = ChatOpenAI(
             model_name=model_name,
@@ -183,6 +183,8 @@ class SimulatedUserLLM:
         question_answer_chain = create_stuff_documents_chain(self.llm, simulated_user_prompt)
         retriever_chain = create_retrieval_chain(self.retriever.get_retriever(), question_answer_chain)
 
+        retriever_chain.config['run_name'] = "RetrievalChain(UserSimulator)"
+
         response = retriever_chain.invoke({"input": chat_history_text, "chat_history": chat_history})
 
         return response
@@ -200,7 +202,7 @@ class DialogAgent:
         vectordb_path = os.path.join(APP_ROOT, 'vectordb')
         retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path=vectordb_path, data=data)
 
-        self.llm = DialogLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever(), session_id=session_id)
+        self.llm = DialogAgentLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever(), session_id=session_id)
 
     def postprocess_response(self, response: str):
         answer = response["answer"]
@@ -262,7 +264,7 @@ class UserSimulator:
         vectordb_path = os.path.join(APP_ROOT, 'vectordb')
         retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path=vectordb_path, data=data)
 
-        self.user_llm = SimulatedUserLLM(config.GPT_MODEL, retriever)
+        self.user_llm = UserSimulatorLLM(config.GPT_MODEL, retriever)
 
     def generate_response(self, history):
         result = self.user_llm.generate_response(history)

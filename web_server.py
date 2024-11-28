@@ -3,7 +3,7 @@ import os
 from flask import Flask, request, Blueprint, jsonify
 from langchain_community.document_loaders import CSVLoader
 
-from langchain_rag import DialogLLM, DialogRetriever
+from langchain_rag import DialogAgentLLM, DialogRetriever
 from logger import logger
 from common import *
 import config
@@ -38,7 +38,7 @@ def chat():
 
     retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path="vectordb", data=data)
 
-    llm = DialogLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever(), session_id=session_id)
+    llm = DialogAgentLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever(), session_id=session_id)
 
     result = llm.generate_response(input_text.strip())
 
