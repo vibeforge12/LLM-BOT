@@ -11,6 +11,7 @@ class TestUnit(unittest.TestCase):
         pass
 
     def test_simulated_chat(self):
+        end_token = '[EOF]'
         # 세션 아이디 생성
         session_id = generate_session_id()
         dialog_agent = DialogAgent(session_id)
@@ -34,9 +35,9 @@ class TestUnit(unittest.TestCase):
                 logger.info('Max turn reached. Conversation end.')
                 break
 
-            if '[EOF]' in agent_answer:
-                logger.info('Conversation end.')
-                is_finished = True
+            is_finished = agent_result['is_finished']
+            if is_finished:
+                category = agent_result['category']
                 break
 
             chat_history = dialog_agent.get_chat_history(return_type='object')
@@ -49,7 +50,10 @@ class TestUnit(unittest.TestCase):
 
             input_text = user_simulator.generate_response(input_history)
 
-        # chat_history가 10턴 이내에서 종료되었는지 확인
-        self.assertLessEqual(len(chat_history), 10)
         # [EOF]가 있는지 확인
         self.assertTrue(is_finished)
+
+        logger.info(f'Category: {category}')
+
+        # chat_history가 10턴 이내에서 종료되었는지 확인
+        self.assertLessEqual(len(chat_history), 10)

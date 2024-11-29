@@ -90,6 +90,7 @@ class DialogAgentLLM:
         file_handler.setFormatter(formatter)
 
         logger.addHandler(file_handler)
+        self.file_handler = file_handler
         self.logger = logger
 
     def generate_response(self, message: str):
@@ -162,6 +163,9 @@ class DialogAgentLLM:
 
         return response
 
+    def __del__(self):
+        if hasattr(self, 'file_handler'):
+            self.file_handler.close()
 
 class DialogRetriever:
     def __init__(self, collection_name: str, chroma_db_path: str, data: list = None):
@@ -227,6 +231,7 @@ class UserSimulatorLLM:
             file_handler.setFormatter(formatter)
 
             logger.addHandler(file_handler)
+            self.file_handler = file_handler
             self.logger = logger
 
     def generate_response(self, chat_history: list):
@@ -262,9 +267,13 @@ class UserSimulatorLLM:
 
         return response
 
+    def __del__(self):
+        if hasattr(self, 'file_handler'):
+            self.file_handler.close()
 
 class DialogAgent:
     chat_history = []
+    end_token = '[EOF]'
 
     def __init__(self, session_id: str, temperature=0):
         csv_file = os.path.join(APP_ROOT, 'data/train.csv')
@@ -296,7 +305,16 @@ class DialogAgent:
 
             history.append(history_dict)
 
-        return {"answer": answer, "history": history}
+        is_finished = False
+        category = None
+
+        if self.end_token in answer:
+            is_finished = True
+
+            category = answer.split(self.end_token)[1].strip()  # [EOF] 뒤에 있는 카테고리 추출
+            category = category[1:-1]  # [진로탐색] -> 진로탐색
+
+        return {"answer": answer, "is_finished": is_finished, "category": category, "history": history}
 
     def generate_response(self, message):
         response = self.llm.generate_response(message)
@@ -353,8 +371,6 @@ if __name__ == "__main__":
 
     # 세션 아이디 생성
     session_id = generate_session_id()
-
-    logger.info(f'Current session_id: {session_id}')
 
     dialog_agent = DialogAgent(session_id)
 

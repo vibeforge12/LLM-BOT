@@ -33,11 +33,12 @@ def chat():
 
     dialog_agent = DialogAgent(session_id)
 
-    result = dialog_agent.generate_response(input_text)
+    agent_result = dialog_agent.generate_response(input_text)
+    agent_answer = agent_result['answer']
 
-    logger.debug(f'LLM result: {result}')
+    logger.debug(f'LLM result: {agent_result}')
 
-    return jsonify(result)
+    return jsonify(agent_result)
 
 
 app.register_blueprint(api)
