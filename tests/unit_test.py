@@ -14,7 +14,7 @@ class TestUnit(unittest.TestCase):
         # 세션 아이디 생성
         session_id = generate_session_id()
         dialog_agent = DialogAgent(session_id)
-        user_simulator = UserSimulator()
+        user_simulator = UserSimulator(session_id=session_id, temperature=1.0)
 
         input_text = '안녕하세요. 진로에 대해 고민이 있어서 상담을 신청했어요.'
 

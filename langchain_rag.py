@@ -1,15 +1,11 @@
 import logging
 import os
-import string
-import random
-from datetime import datetime
 from typing import Dict, Any, List, Optional
 from uuid import UUID
 
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
 from langchain.chains.retrieval import create_retrieval_chain
-from langchain_core.agents import AgentFinish
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.output_parsers import JsonOutputParser
@@ -61,10 +57,10 @@ class Chat(BaseModel):
 
 
 class DialogAgentLLM:
-    def __init__(self, model_name: str, retriever: Chroma, session_id: str, log_dir: str = None):
+    def __init__(self, model_name: str, retriever: Chroma, session_id: str, log_dir: str = None, temperature=0):
         self.llm = ChatOpenAI(
             model_name=model_name,
-            temperature=0,
+            temperature=temperature,
         )
 
         self.critic_llm = ChatOpenAI(
@@ -80,6 +76,8 @@ class DialogAgentLLM:
         #
         if log_dir is None:
             log_dir = os.path.join(APP_ROOT, 'logs')
+
+        log_dir = os.path.join(log_dir, session_id)
         os.makedirs(log_dir, exist_ok=True)
 
         logger = logging.Logger(session_id)
@@ -87,7 +85,7 @@ class DialogAgentLLM:
 
         formatter = logging.Formatter('%(asctime)s (%(module)s:%(lineno)d) %(name)s - %(levelname)s: %(message)s')
 
-        file_handler = logging.FileHandler(os.path.join(log_dir, f"{session_id}.log"))
+        file_handler = logging.FileHandler(os.path.join(log_dir, f"dialog_agent.log"))
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(formatter)
 
@@ -172,10 +170,12 @@ class DialogRetriever:
 
         self.embeddings_model = OpenAIEmbeddings()
 
-        if not os.path.exists(chroma_db_path):
+        #
+        # VectorStore 생성
+        #
+        self.load_vectorstore()
+        if len(self.vectorstore.get(limit=1)['ids']) == 0:
             self.create_vectorstore(data)
-        else:
-            self.load_vectorstore()
 
     def create_vectorstore(self, data):
         self.vectorstore = Chroma.from_documents(documents=data, embedding=self.embeddings_model,
@@ -197,13 +197,37 @@ class DialogRetriever:
 
 
 class UserSimulatorLLM:
-    def __init__(self, model_name: str, retriever: DialogRetriever):
+    def __init__(self, model_name: str, retriever: DialogRetriever, session_id: str = None, log_dir: str = None,
+                 temperature=0):
         self.llm = ChatOpenAI(
             model_name=model_name,
-            temperature=0,
+            temperature=temperature,
         )
 
         self.retriever = retriever
+        self.session_id = session_id
+
+        if self.session_id:
+            #
+            # 파일 로그 설정
+            #
+            if log_dir is None:
+                log_dir = os.path.join(APP_ROOT, 'logs')
+
+            log_dir = os.path.join(log_dir, session_id)
+            os.makedirs(log_dir, exist_ok=True)
+
+            logger = logging.Logger(session_id)
+            logger.setLevel(logging.DEBUG)
+
+            formatter = logging.Formatter('%(asctime)s (%(module)s:%(lineno)d) %(name)s - %(levelname)s: %(message)s')
+
+            file_handler = logging.FileHandler(os.path.join(log_dir, f"user_simulator.log"))
+            file_handler.setLevel(logging.DEBUG)
+            file_handler.setFormatter(formatter)
+
+            logger.addHandler(file_handler)
+            self.logger = logger
 
     def generate_response(self, chat_history: list):
         chat_history_list = []
@@ -228,7 +252,13 @@ class UserSimulatorLLM:
 
         retriever_chain.config['run_name'] = "RetrievalChain(UserSimulator)"
 
-        response = retriever_chain.invoke({"input": chat_history_text, "chat_history": chat_history})
+        if self.session_id:
+            config = {"configurable": {"session_id": self.session_id},
+                      "callbacks": [CustomHandler(self.logger)]}  # session_id를 넘기긴 해야하나 사용되지 않음
+        else:
+            config = {}
+
+        response = retriever_chain.invoke({"input": chat_history_text, "chat_history": chat_history}, config=config)
 
         return response
 
@@ -236,17 +266,17 @@ class UserSimulatorLLM:
 class DialogAgent:
     chat_history = []
 
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, temperature=0):
         csv_file = os.path.join(APP_ROOT, 'data/train.csv')
         loader = CSVLoader(file_path=csv_file, metadata_columns=["id", "category"],
                            content_columns=["category", "content"])
         data = loader.load()
 
         vectordb_path = os.path.join(APP_ROOT, 'vectordb')
-        retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path=vectordb_path, data=data)
+        retriever = DialogRetriever(collection_name="train_data", chroma_db_path=vectordb_path, data=data)
 
         self.llm = DialogAgentLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever(),
-                                  session_id=session_id)
+                                  session_id=session_id, temperature=temperature)
 
         logger.info(f'DialogAgent session_id: {session_id}')
 
@@ -301,16 +331,16 @@ class DialogAgent:
 
 
 class UserSimulator:
-    def __init__(self):
+    def __init__(self, session_id: str = None, temperature=0):
         csv_file = os.path.join(APP_ROOT, 'data/test.csv')
         loader = CSVLoader(file_path=csv_file, metadata_columns=["id", "category"],
                            content_columns=["category", "content"])
         data = loader.load()
 
         vectordb_path = os.path.join(APP_ROOT, 'vectordb')
-        retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path=vectordb_path, data=data)
+        retriever = DialogRetriever(collection_name="test_data", chroma_db_path=vectordb_path, data=data)
 
-        self.user_llm = UserSimulatorLLM(config.GPT_MODEL, retriever)
+        self.user_llm = UserSimulatorLLM(config.GPT_MODEL, retriever, session_id=session_id, temperature=temperature)
 
     def generate_response(self, history):
         result = self.user_llm.generate_response(history)
