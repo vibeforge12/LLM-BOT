@@ -1,14 +1,9 @@
-import random
-import string
 import unittest
-from datetime import datetime
-
-import requests
 
 import config
 from langchain_rag import DialogAgent, UserSimulator
 from logger import logger
-from utils.utils import reverse_history_role
+from utils.utils import reverse_history_role, generate_session_id
 
 
 class TestUnit(unittest.TestCase):
@@ -17,21 +12,27 @@ class TestUnit(unittest.TestCase):
 
     def test_simulated_chat(self):
         # 세션 아이디 생성
-        date_str = datetime.now().strftime("%Y%m%d")
-        rand_str = ''.join(random.choice(string.ascii_lowercase) for i in range(5))
-        session_id = f"{date_str}_{rand_str}"
-
+        session_id = generate_session_id()
         dialog_agent = DialogAgent(session_id)
         user_simulator = UserSimulator()
 
         input_text = '안녕하세요. 진로에 대해 고민이 있어서 상담을 신청했어요.'
 
-        is_finished = False
+        is_finished = False  # EOF가 있는지 확인하기 위한 변수
+        max_turn = 20  # 최대 대화 가능한 턴
+        turn = 0  # 각 발화 당 1개의 턴
+
         while True:
             logger.info(f'User: {input_text}')
+            turn += 1
             agent_result = dialog_agent.generate_response(input_text)
             agent_answer = agent_result['answer']
             logger.info(f'Agent: {agent_answer}')
+            turn += 1
+
+            if turn >= max_turn:
+                logger.info('Max turn reached. Conversation end.')
+                break
 
             if '[EOF]' in agent_answer:
                 logger.info('Conversation end.')
@@ -52,5 +53,3 @@ class TestUnit(unittest.TestCase):
         self.assertLessEqual(len(chat_history), 10)
         # [EOF]가 있는지 확인
         self.assertTrue(is_finished)
-
-

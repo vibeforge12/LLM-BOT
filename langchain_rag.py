@@ -27,6 +27,7 @@ import config
 from logger import logger
 from common import *
 from prompt.prompt_ko import *
+from utils.utils import generate_session_id
 
 
 class CustomHandler(BaseCallbackHandler):
@@ -321,9 +322,7 @@ class UserSimulator:
 if __name__ == "__main__":
 
     # 세션 아이디 생성
-    date_str = datetime.now().strftime("%Y%m%d")
-    rand_str = ''.join(random.choice(string.ascii_lowercase) for i in range(5))
-    session_id = f"{date_str}_{rand_str}"
+    session_id = generate_session_id()
 
     logger.info(f'Current session_id: {session_id}')
 
