@@ -3,6 +3,7 @@
 .vscode
 venv
 db
+logs
 models
 vectordb
 sqlite.db
