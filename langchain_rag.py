@@ -1,14 +1,19 @@
+import logging
+import os
 import string
 import random
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from uuid import UUID
 
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
 from langchain.chains.retrieval import create_retrieval_chain
+from langchain_core.agents import AgentFinish
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.outputs import LLMResult
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_chroma import Chroma
@@ -25,11 +30,29 @@ from prompt.prompt_ko import *
 
 
 class CustomHandler(BaseCallbackHandler):
+    def __init__(self, logger: logging.Logger):
+        self.logger = logger
+
     def on_llm_start(
             self, serialized: Dict[str, Any], prompts: List[str], **kwargs: Any
     ) -> Any:
         formatted_prompts = "\n".join(prompts)
-        logger.debug(f"Prompt:\n{formatted_prompts}")
+
+        # save log
+        self.logger.info(f"Prompt:\n{formatted_prompts}")
+
+    def on_llm_end(
+            self,
+            response: LLMResult,
+            *,
+            run_id: UUID,
+            parent_run_id: Optional[UUID] = None,
+            **kwargs: Any,
+    ) -> Any:
+        output_text = response.generations[0][0].text
+
+        # save log
+        self.logger.info(f"Output:\n{output_text}")
 
 
 class Chat(BaseModel):
@@ -37,7 +60,7 @@ class Chat(BaseModel):
 
 
 class DialogAgentLLM:
-    def __init__(self, model_name: str, retriever: Chroma, session_id: str):
+    def __init__(self, model_name: str, retriever: Chroma, session_id: str, log_dir: str = None):
         self.llm = ChatOpenAI(
             model_name=model_name,
             temperature=0,
@@ -50,6 +73,25 @@ class DialogAgentLLM:
 
         self.retriever = retriever
         self.session_id = session_id
+
+        #
+        # 파일 로그 설정
+        #
+        if log_dir is None:
+            log_dir = os.path.join(APP_ROOT, 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+
+        logger = logging.Logger(session_id)
+        logger.setLevel(logging.DEBUG)
+
+        formatter = logging.Formatter('%(asctime)s (%(module)s:%(lineno)d) %(name)s - %(levelname)s: %(message)s')
+
+        file_handler = logging.FileHandler(os.path.join(log_dir, f"{session_id}.log"))
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(formatter)
+
+        logger.addHandler(file_handler)
+        self.logger = logger
 
     def generate_response(self, message: str):
         #
@@ -86,7 +128,7 @@ class DialogAgentLLM:
         ), input_messages_key="input", history_messages_key="chat_history", output_messages_key="answer")
 
         config = {"configurable": {"session_id": self.session_id},
-                  "callbacks": [CustomHandler()]}  # session_id를 넘기긴 해야하나 사용되지 않음
+                  "callbacks": [CustomHandler(self.logger)]}  # session_id를 넘기긴 해야하나 사용되지 않음
         response = chain_with_history.invoke({"input": message}, config=config)
 
         #
@@ -202,7 +244,10 @@ class DialogAgent:
         vectordb_path = os.path.join(APP_ROOT, 'vectordb')
         retriever = DialogRetriever(collection_name="dialog_data", chroma_db_path=vectordb_path, data=data)
 
-        self.llm = DialogAgentLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever(), session_id=session_id)
+        self.llm = DialogAgentLLM(model_name=config.GPT_MODEL, retriever=retriever.get_retriever(),
+                                  session_id=session_id)
+
+        logger.info(f'DialogAgent session_id: {session_id}')
 
     def postprocess_response(self, response: str):
         answer = response["answer"]

@@ -26,13 +26,16 @@ class TestUnit(unittest.TestCase):
 
         input_text = '안녕하세요. 진로에 대해 고민이 있어서 상담을 신청했어요.'
 
+        is_finished = False
         while True:
             logger.info(f'User: {input_text}')
-            agent_text = dialog_agent.generate_response(input_text)
-            logger.info(f'Agent: {agent_text}')
+            agent_result = dialog_agent.generate_response(input_text)
+            agent_answer = agent_result['answer']
+            logger.info(f'Agent: {agent_answer}')
 
-            if '[EOF]' in agent_text:
+            if '[EOF]' in agent_answer:
                 logger.info('Conversation end.')
+                is_finished = True
                 break
 
             chat_history = dialog_agent.get_chat_history(return_type='object')
@@ -44,3 +47,10 @@ class TestUnit(unittest.TestCase):
             input_history = reverse_history_role(chat_history)
 
             input_text = user_simulator.generate_response(input_history)
+
+        # chat_history가 10턴 이내에서 종료되었는지 확인
+        self.assertLessEqual(len(chat_history), 10)
+        # [EOF]가 있는지 확인
+        self.assertTrue(is_finished)
+
+
