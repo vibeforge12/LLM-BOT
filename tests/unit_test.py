@@ -31,6 +31,8 @@ class TestUnit(unittest.TestCase):
             logger.info(f'Agent: {agent_answer}')
             turn += 1
 
+            chat_history = dialog_agent.get_chat_history(return_type='object')
+
             if turn >= max_turn:
                 logger.info('Max turn reached. Conversation end.')
                 break
@@ -40,12 +42,6 @@ class TestUnit(unittest.TestCase):
                 category = agent_result['category']
                 break
 
-            chat_history = dialog_agent.get_chat_history(return_type='object')
-
-            # history = [
-            #     AIMessage(input_text),
-            #     HumanMessage("진로에 대해 고민이 많은가보구나.")
-            # ]
             input_history = reverse_history_role(chat_history)
 
             input_text = user_simulator.generate_response(input_history)
