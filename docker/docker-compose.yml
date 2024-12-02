@@ -1,0 +1,17 @@
+services:
+  flask:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        ENVIRONMENT: ${ENVIRONMENT}
+    container_name: "${ENVIRONMENT}-llm-bot"
+    entrypoint: bash /docker-entrypoint.sh
+    environment:
+      - TZ="Asia/Seoul"
+    shm_size: 2gb
+    ports:
+      - "${WEB_PORT}:5050"
+    volumes:
+        - ../:/root/LLM-bot
+    working_dir: /root/LLM-bot
