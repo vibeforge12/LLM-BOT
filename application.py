@@ -7,17 +7,17 @@ from logger import logger
 from common import *
 import config
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'secret!'
-app.config['UPLOAD_FOLDER'] = os.path.join(APP_ROOT, UPLOAD_FOLDER)
-app.config['JSON_AS_ASCII'] = False
-app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
-app.json.sort_keys = True
+application = Flask(__name__)
+application.config['SECRET_KEY'] = 'secret!'
+application.config['UPLOAD_FOLDER'] = os.path.join(APP_ROOT, UPLOAD_FOLDER)
+application.config['JSON_AS_ASCII'] = False
+application.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
+application.json.sort_keys = True
 
 api = Blueprint('api', __name__, url_prefix='/api')
 
 
-@app.route("/")
+@application.route("/")
 def index():
     return 'text'
 
@@ -41,7 +41,7 @@ def chat():
     return jsonify(agent_result)
 
 
-app.register_blueprint(api)
+application.register_blueprint(api)
 
 if __name__ == '__main__':
     logger.info('Start XAI API Server')
@@ -49,4 +49,4 @@ if __name__ == '__main__':
     upload_folder = os.path.join(APP_ROOT, UPLOAD_FOLDER)
     os.makedirs(upload_folder, exist_ok=True)
 
-    app.run(host='0.0.0.0', port=SERVER_PORT, debug=DEBUG)
+    application.run(host='0.0.0.0', port=SERVER_PORT, debug=DEBUG)
