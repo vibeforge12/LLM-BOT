@@ -34,7 +34,7 @@ pip install -r requirements.txt
 ### 직접 실행
 
 ```
-python web_server.py
+python application.py
 ```
 
 ### Docker에서 실행
